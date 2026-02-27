@@ -1,15 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
-import { Package, Mail, Lock, User, Loader2, Users, Check } from "lucide-react"
+import { Package, Mail, Lock, User, Loader2 } from "lucide-react"
 
 const formSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -21,19 +20,10 @@ const formSchema = z.object({
   path: ["confirmPassword"],
 })
 
-interface UserList {
-  id: string
-  name: string | null
-  email: string
-}
-
 export default function RegisterPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [hasPartner, setHasPartner] = useState(false)
-  const [users, setUsers] = useState<UserList[]>([])
-  const [selectedPartner, setSelectedPartner] = useState<string>("")
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,15 +34,6 @@ export default function RegisterPage() {
       confirmPassword: ""
     },
   })
-
-  useEffect(() => {
-    if (hasPartner) {
-      fetch("/api/users")
-        .then(res => res.json())
-        .then(data => setUsers(data))
-        .catch(err => console.error("Erro ao buscar usuários:", err))
-    }
-  }, [hasPartner])
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setLoading(true)
@@ -68,7 +49,6 @@ export default function RegisterPage() {
           name: values.name,
           email: values.email,
           password: values.password,
-          partnerId: selectedPartner || null,
         }),
       })
 
@@ -185,61 +165,6 @@ export default function RegisterPage() {
               </div>
               {form.formState.errors.confirmPassword && (
                 <p className="text-sm text-red-500">{form.formState.errors.confirmPassword.message}</p>
-              )}
-            </div>
-
-            {/* Partner Selection */}
-            <div className="space-y-3 border-t pt-4">
-              <div className="flex items-center gap-2">
-                <Checkbox 
-                  id="hasPartner" 
-                  checked={hasPartner}
-                  onCheckedChange={(checked: boolean) => {
-                    setHasPartner(checked)
-                    if (!checked) setSelectedPartner("")
-                  }}
-                />
-                <label htmlFor="hasPartner" className="text-sm font-medium text-gray-700 cursor-pointer">
-                  Tenho um sócio/partner
-                </label>
-              </div>
-
-              {hasPartner && (
-                <div className="ml-6 space-y-2">
-                  {users.length === 0 ? (
-                    <p className="text-sm text-gray-400">Nenhum usuário disponível.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {users.map((user) => (
-                        <div 
-                          key={user.id}
-                          onClick={() => setSelectedPartner(user.id)}
-                          className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                            selectedPartner === user.id
-                              ? "border-indigo-500 bg-indigo-50"
-                              : "border-gray-200 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            selectedPartner === user.id
-                              ? "bg-indigo-500 text-white"
-                              : "bg-gray-200 text-gray-500"
-                          }`}>
-                            {selectedPartner === user.id ? (
-                              <Check className="w-4 h-4" />
-                            ) : (
-                              <Users className="w-4 h-4" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{user.name || "Sem nome"}</p>
-                            <p className="text-xs text-gray-500">{user.email}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               )}
             </div>
 

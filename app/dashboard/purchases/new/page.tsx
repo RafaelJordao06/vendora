@@ -1,61 +1,98 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { 
   Package, 
   DollarSign, 
   User, 
   FileText, 
   ArrowLeft,
-  Loader2
+  Loader2,
+  Users,
+  Check
 } from "lucide-react"
 import Link from "next/link"
 
 const formSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   description: z.string().optional(),
-  totalAmount: z.coerce.number().min(0.01, "Valor deve ser positivo"),
-  rafaelInvest: z.coerce.number().min(0, "Investimento deve ser positivo"),
-  socioInvest: z.coerce.number().min(0, "Investimento deve ser positivo"),
-}).refine((data) => {
-  const totalInvest = data.rafaelInvest + data.socioInvest
-  return Math.abs(totalInvest - data.totalAmount) < 0.01
-}, {
-  message: "A soma dos investimentos deve ser igual ao valor total",
-  path: ["totalAmount"],
+  totalAmount: z.string().refine((val) => {
+    const num = parseFloat(val.replace(',', '.'))
+    return !isNaN(num) && num > 0
+  }, "Valor deve ser maior que 0"),
+  rafaelInvest: z.string().refine((val) => {
+    const num = parseFloat(val.replace(',', '.'))
+    return !isNaN(num) && num >= 0
+  }, "Valor inválido"),
+  socioInvest: z.string().optional(),
 })
+
+interface UserList {
+  id: string
+  name: string | null
+  email: string
+}
 
 export default function NewPurchasePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [hasPartner, setHasPartner] = useState(false)
+  const [users, setUsers] = useState<UserList[]>([])
+  const [selectedPartner, setSelectedPartner] = useState<string>("")
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
       name: "",
       description: "",
-      totalAmount: 0,
-      rafaelInvest: 0,
-      socioInvest: 0,
+      totalAmount: "",
+      rafaelInvest: "",
+      socioInvest: "",
     },
   })
+
+  useEffect(() => {
+    if (hasPartner) {
+      fetch("/api/users")
+        .then(res => res.json())
+        .then(data => setUsers(data))
+        .catch(err => console.error("Erro ao buscar usuários:", err))
+    }
+  }, [hasPartner])
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setLoading(true)
+      const totalAmount = parseFloat(values.totalAmount.replace(',', '.'))
+      const rafaelInvest = parseFloat(values.rafaelInvest.replace(',', '.'))
+      const socioInvest = hasPartner ? parseFloat((values.socioInvest || "0").replace(',', '.')) : 0
+      
+      // Validate sum
+      if (Math.abs((rafaelInvest + socioInvest) - totalAmount) > 0.01) {
+        alert("A soma dos investimentos deve ser igual ao valor total!")
+        setLoading(false)
+        return
+      }
+      
       const response = await fetch("/api/purchases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...values,
+          name: values.name,
+          description: values.description,
+          totalAmount,
+          rafaelInvest,
+          socioInvest,
+          partnerId: selectedPartner || null,
         }),
       })
 
@@ -144,21 +181,79 @@ export default function NewPurchasePage() {
               </div>
             </div>
 
+            {/* Pergunta: Tem Sócio? */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <Checkbox 
+                  id="hasPartner" 
+                  checked={hasPartner}
+                  onCheckedChange={(checked: boolean) => {
+                    setHasPartner(checked)
+                    if (!checked) {
+                      form.setValue("socioInvest", "")
+                      setSelectedPartner("")
+                    }
+                  }}
+                />
+                <label htmlFor="hasPartner" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  Tem sócio/partner nesta compra?
+                </label>
+              </div>
+            </div>
+
+            {/* Selecionar Sócio */}
+            {hasPartner && (
+              <div className="mb-6">
+                <label className="text-sm font-medium text-gray-700 mb-3 block">Selecione o sócio:</label>
+                {users.length === 0 ? (
+                  <p className="text-sm text-gray-400">Nenhum usuário disponível.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {users.map((user) => (
+                      <div 
+                        key={user.id}
+                        onClick={() => setSelectedPartner(user.id)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                          selectedPartner === user.id
+                            ? "border-indigo-500 bg-indigo-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          selectedPartner === user.id
+                            ? "bg-indigo-500 text-white"
+                            : "bg-gray-200 text-gray-500"
+                        }`}>
+                          {selectedPartner === user.id ? (
+                            <Check className="w-5 h-5" />
+                          ) : (
+                            <Users className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{user.name || "Sem nome"}</p>
+                          <p className="text-xs text-gray-500">{user.email}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">Valor Total Pago</label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input 
-                    type="number" 
-                    step="0.01" 
                     {...form.register("totalAmount")} 
                     placeholder="0,00" 
                     className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                   />
                 </div>
                 {form.formState.errors.totalAmount && (
-                  <p className="text-sm text-red-500">{form.formState.errors.totalAmount.message}</p>
+                  <p className="text-sm text-red-500">{form.formState.errors.totalAmount.message as string}</p>
                 )}
               </div>
 
@@ -167,8 +262,6 @@ export default function NewPurchasePage() {
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input 
-                    type="number" 
-                    step="0.01" 
                     {...form.register("rafaelInvest")} 
                     placeholder="0,00" 
                     className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
@@ -176,19 +269,19 @@ export default function NewPurchasePage() {
                 </div>
               </div>
 
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-gray-700">Parte do Sócio/Partner</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    {...form.register("socioInvest")} 
-                    placeholder="0,00" 
-                    className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                  />
+              {hasPartner && (
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium text-gray-700">Parte do Sócio/Partner</label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Input 
+                      {...form.register("socioInvest")} 
+                      placeholder="0,00" 
+                      className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="mt-4 p-4 bg-blue-50 rounded-xl">
@@ -215,12 +308,24 @@ export default function NewPurchasePage() {
                   {form.watch("totalAmount") ? `R$ ${form.watch("totalAmount")}` : "---"}
                 </span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Tem Sócio?</span>
+                <span className="font-medium text-gray-900">{hasPartner ? "Sim" : "Não"}</span>
+              </div>
+              {hasPartner && selectedPartner && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Sócio:</span>
+                  <span className="font-medium text-gray-900">
+                    {users.find(u => u.id === selectedPartner)?.name || users.find(u => u.id === selectedPartner)?.email}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 space-y-3">
               <Button 
                 type="submit" 
-                disabled={loading}
+                disabled={loading || (hasPartner && !selectedPartner)}
                 className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg shadow-indigo-600/20"
               >
                 {loading ? (

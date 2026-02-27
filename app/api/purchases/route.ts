@@ -11,14 +11,16 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { name, description, totalAmount, rafaelInvest, socioInvest, status, images, participantIds } = body
+    const { name, description, totalAmount, rafaelInvest, socioInvest, status, images, partnerId } = body
 
-    if (!name || totalAmount === undefined || rafaelInvest === undefined || socioInvest === undefined) {
+    if (!name || totalAmount === undefined || rafaelInvest === undefined) {
       return new NextResponse("Missing required fields", { status: 400 })
     }
 
+    const socioValue = socioInvest || 0
+
     // Validate total amount
-    if (Math.abs((rafaelInvest + socioInvest) - totalAmount) > 0.01) {
+    if (Math.abs((rafaelInvest + socioValue) - totalAmount) > 0.01) {
       return new NextResponse("Investments must equal total amount", { status: 400 })
     }
 
@@ -28,16 +30,16 @@ export async function POST(req: Request) {
         description,
         totalAmount,
         rafaelInvest,
-        socioInvest,
+        socioInvest: socioValue,
         status: status || "COMPRADO",
         userId: session.user.id,
-        images: {
+        images: images && images.length > 0 ? {
           createMany: {
-            data: images ? images.map((image: { url: string }) => image) : []
+            data: images.map((image: { url: string }) => image)
           }
-        },
-        participants: participantIds?.length > 0 ? {
-          connect: participantIds.map((id: string) => ({ id }))
+        } : undefined,
+        participants: partnerId ? {
+          connect: { id: partnerId }
         } : undefined
       },
       include: {
