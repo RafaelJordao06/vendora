@@ -33,11 +33,9 @@ model Purchase {
   saleDate     DateTime?
   images       Image[]
   
-  // Dono da compra (quem criou)
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Participantes da compra (socios)
   participants User[]   @relation("PurchaseParticipants")
 }
 
