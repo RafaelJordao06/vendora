@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -46,9 +46,11 @@ export default function NewPurchasePage() {
   const [hasPartner, setHasPartner] = useState(false)
   const [users, setUsers] = useState<UserList[]>([])
   const [selectedPartner, setSelectedPartner] = useState<string>("")
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState("")
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
       description: "",
@@ -58,14 +60,37 @@ export default function NewPurchasePage() {
     },
   })
 
+  const fetchUsers = useCallback(async () => {
+    try {
+      setUsersLoading(true)
+      setUsersError("")
+
+      const response = await fetch("/api/users")
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Sua sessão expirou. Faça login novamente para listar os sócios.")
+        }
+        throw new Error("Não foi possível carregar os sócios agora.")
+      }
+
+      const data = await response.json()
+      setUsers(Array.isArray(data) ? data : [])
+    } catch (error) {
+      console.error("Erro ao buscar usuários:", error)
+      const message = error instanceof Error ? error.message : "Falha ao carregar sócios."
+      setUsersError(message)
+      setUsers([])
+    } finally {
+      setUsersLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (hasPartner) {
-      fetch("/api/users")
-        .then(res => res.json())
-        .then(data => setUsers(data))
-        .catch(err => console.error("Erro ao buscar usuários:", err))
+      fetchUsers()
     }
-  }, [hasPartner])
+  }, [hasPartner, fetchUsers])
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -205,12 +230,29 @@ export default function NewPurchasePage() {
             {hasPartner && (
               <div className="mb-6">
                 <label className="text-sm font-medium text-gray-700 mb-3 block">Selecione o sócio:</label>
-                {users.length === 0 ? (
-                  <p className="text-sm text-gray-400">Nenhum usuário disponível.</p>
+                {usersLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Carregando sócios...
+                  </div>
+                ) : usersError ? (
+                  <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                    <p className="text-sm text-red-700">{usersError}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchUsers}
+                    >
+                      Tentar novamente
+                    </Button>
+                  </div>
+                ) : users.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nenhum usuário disponível para parceria no momento.</p>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {users.map((user) => (
-                      <div 
+                      <div
                         key={user.id}
                         onClick={() => setSelectedPartner(user.id)}
                         className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
