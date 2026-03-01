@@ -12,7 +12,7 @@ import {
   Menu,
   X,
   Package,
-  TrendingUp,
+  BarChart3,
   Users
 } from "lucide-react"
 import { useState } from "react"
@@ -26,6 +26,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/purchases/new", label: "Nova Compra", icon: PlusCircle },
+  { href: "/dashboard/reports", label: "Relatórios", icon: BarChart3 },
 ]
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
