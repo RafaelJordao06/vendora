@@ -7,8 +7,8 @@ const globalForPrisma = globalThis as unknown as {
 const withPgbouncerParam = (databaseUrl?: string) => {
   if (!databaseUrl) return undefined
 
-  const shouldForcePgbouncer = process.env.PRISMA_FORCE_PGBOUNCER === 'true'
-  if (!shouldForcePgbouncer) return databaseUrl
+  const shouldDisablePgbouncer = process.env.PRISMA_DISABLE_PGBOUNCER === 'true'
+  if (shouldDisablePgbouncer) return databaseUrl
 
   try {
     const url = new URL(databaseUrl)
