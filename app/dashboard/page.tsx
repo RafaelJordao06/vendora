@@ -7,7 +7,7 @@ import { Status } from "@prisma/client"
 import { PurchaseActions } from "@/components/purchase-actions"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { Package, TrendingUp, DollarSign, ShoppingCart, ArrowRight } from "lucide-react"
+import { Package, ArrowRight } from "lucide-react"
 
 async function getStats(userId: string) {
   const purchases = await prisma.purchase.findMany({
@@ -101,6 +101,20 @@ function EmptyState() {
   )
 }
 
+function PurchaseStatusBadge({ status }: { status: Status }) {
+  return (
+    <Badge
+      variant={status === "COMPRADO" ? "default" : "secondary"}
+      className={status === "COMPRADO"
+        ? "bg-amber-100 text-amber-700 hover:bg-amber-100"
+        : "bg-green-100 text-green-700 hover:bg-green-100"
+      }
+    >
+      {status === "COMPRADO" ? "Comprado" : "Vendido"}
+    </Badge>
+  )
+}
+
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id || ""
@@ -135,7 +149,7 @@ export default async function DashboardPage() {
         <StatCard title="Total de Compras" value={stats.purchaseCount.toString()} />
       </div>
 
-      {/* Purchases Table */}
+      {/* Purchases */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">Compras Recentes</h2>
@@ -144,8 +158,65 @@ export default async function DashboardPage() {
         {purchases.length === 0 ? (
           <EmptyState />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <>
+            <div className="grid gap-4 p-4 md:hidden">
+              {purchases.map((purchase) => {
+                const isOwner = purchase.userId === userId
+
+                return (
+                  <div key={purchase.id} className="rounded-xl border border-gray-200 p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{purchase.name}</h3>
+                        {purchase.description && (
+                          <p className="text-sm text-gray-500 mt-1">{purchase.description}</p>
+                        )}
+                      </div>
+                      <PurchaseStatusBadge status={purchase.status} />
+                    </div>
+
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">Dono:</span>{" "}
+                        <span className="text-gray-900">{purchase.user.name || purchase.user.email}</span>
+                        {isOwner && (
+                          <Badge variant="secondary" className="text-xs ml-2 bg-indigo-100 text-indigo-700">Dono</Badge>
+                        )}
+                      </div>
+
+                      {purchase.participants.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {purchase.participants.map((p) => (
+                            <Badge key={p.id} variant="outline" className="text-xs">
+                              {p.name || p.email}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+
+                      <div>
+                        <div className="text-gray-500">Valor investido</div>
+                        <div className="font-semibold text-gray-900">{formatCurrency(purchase.totalAmount)}</div>
+                      </div>
+
+                      {purchase.status === "VENDIDO" && purchase.saleAmount && (
+                        <div>
+                          <div className="text-gray-500">Valor de venda</div>
+                          <div className="font-semibold text-green-600">{formatCurrency(purchase.saleAmount)}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-1">
+                      <PurchaseActions purchase={purchase} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-6 py-4 text-sm font-medium text-gray-500">Produto</th>
@@ -187,15 +258,7 @@ export default async function DashboardPage() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <Badge 
-                          variant={purchase.status === "COMPRADO" ? "default" : "secondary"}
-                          className={purchase.status === "COMPRADO" 
-                            ? "bg-amber-100 text-amber-700 hover:bg-amber-100" 
-                            : "bg-green-100 text-green-700 hover:bg-green-100"
-                          }
-                        >
-                          {purchase.status === "COMPRADO" ? "Comprado" : "Vendido"}
-                        </Badge>
+                        <PurchaseStatusBadge status={purchase.status} />
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="font-semibold text-gray-900">{formatCurrency(purchase.totalAmount)}</div>
@@ -212,8 +275,9 @@ export default async function DashboardPage() {
                   )
                 })}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

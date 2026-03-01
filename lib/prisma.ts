@@ -1,13 +1,46 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
+const withPgbouncerParam = (databaseUrl?: string) => {
+  if (!databaseUrl) return undefined
+
+  const shouldForcePgbouncer = process.env.PRISMA_FORCE_PGBOUNCER === 'true'
+  if (!shouldForcePgbouncer) return databaseUrl
+
+  try {
+    const url = new URL(databaseUrl)
+
+    if ((url.protocol === 'postgres:' || url.protocol === 'postgresql:') && !url.searchParams.has('pgbouncer')) {
+      url.searchParams.set('pgbouncer', 'true')
+    }
+
+    return url.toString()
+  } catch {
+    return databaseUrl
+  }
+}
+
 const createPrismaClient = () => {
-  return new PrismaClient({
+  const databaseUrl = withPgbouncerParam(process.env.DATABASE_URL)
+
+  const config: Prisma.PrismaClientOptions = {
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  })
+  }
+
+  if (databaseUrl) {
+    config.datasources = {
+      db: {
+        url: databaseUrl,
+      },
+    }
+  } else if (process.env.NODE_ENV === 'development') {
+    console.warn('[prisma] DATABASE_URL is not set. Prisma will use the default datasource configuration.')
+  }
+
+  return new PrismaClient(config)
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient()
